@@ -1,0 +1,608 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Phone, MessageCircle, Instagram, X } from "lucide-react";
+
+// ================== الإعدادات العامة ==================
+// رابط الشراء المباشر (زر "اشترك الآن")
+const PURCHASE_URL = "https://salla.sa/aruna/%D8%AF%D9%88%D8%B1%D8%A9-%D8%A7%D9%84%D8%AA%D8%B9%D9%84%D9%8A%D9%82-%D8%A7%D9%84%D8%B5%D9%88%D8%AA%D9%8A/p606312499";
+
+// ألوان قابلة للتبديل لاحقًا بحسب هويتك (أرسل لي الصورة/الهوية)
+const palette = {
+  bg: "#0B1220", // خلفية داكنة
+  surface: "#0F1B2D", // بطاقات/مقاطع
+  text: "#E9F0FF", // نص أساسي
+  sub: "#A8B7D6", // نص ثانوي
+  accent: "#F4D03F", // لون مميز (أصفر)
+  accentAlt: "#1EAEDB", // لون ثانوي (أزرق فاتح)
+};
+
+// ================== عدّاد الوقت لانتهاء الخصم (نسخة محسّنة) ==================
+/**
+ * useCountdown — يحسب الوقت المتبقي حتى موعد نهائي محدد (deadline)
+ * - يوقف المؤقّت تلقائيًا عند الوصول للصفر
+ * - يقبل قيمة ابتدائية، وإذا لم تُمرَّر يستخدم +1:30:00 من لحظة التحميل
+ */
+function useCountdown(deadlineMs) {
+  const defaultDeadline = useMemo(() => Date.now() + 90 * 60 * 1000, []); // 1h30m
+  const target = deadlineMs ?? defaultDeadline;
+  const [remaining, setRemaining] = useState(() => Math.max(0, target - Date.now()));
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    function tick() {
+      const diff = target - Date.now();
+      if (diff <= 0) {
+        setRemaining(0);
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = null;
+        return;
+      }
+      setRemaining(diff);
+    }
+    timerRef.current = setInterval(tick, 1000);
+    tick(); // تحديث فوري
+    return () => timerRef.current && clearInterval(timerRef.current);
+  }, [target]);
+
+  const totalSeconds = Math.floor(remaining / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return { hours, minutes, seconds, totalSeconds };
+}
+
+// ================== عدّاد متحرّك بسيط ==================
+function useCountUp(target, duration = 1200, opts = { disableAnimation: false }) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (opts.disableAnimation) {
+      setValue(target);
+      return;
+    }
+    let start = null;
+    let raf;
+    const step = (ts) => {
+      if (start === null) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      setValue(Math.round(p * target));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration, opts.disableAnimation]);
+  return value;
+}
+
+// ================== تفضيل تقليل الحركة ==================
+function usePrefersReducedMotion() {
+  const [prefers, setPrefers] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefers(mql.matches);
+    const onChange = () => setPrefers(mql.matches);
+    mql.addEventListener?.("change", onChange);
+    return () => mql.removeEventListener?.("change", onChange);
+  }, []);
+  return prefers;
+}
+
+// ================== مكوّن بطاقة ميزة ==================
+const Feature = ({ icon, title, desc }) => (
+  <div
+    className="rounded-2xl p-6 border border-white/10 bg-white/5 transform transition-all duration-300 hover:scale-105 hover:bg-white/10"
+    style={{ opacity: 1 }}
+    role="listitem"
+  >
+    <div className="text-2xl mb-3" aria-hidden>
+      {icon}
+    </div>
+    <div className="text-white font-semibold">{title}</div>
+    <div className="text-white/70 text-sm leading-relaxed mt-1">{desc}</div>
+  </div>
+);
+
+// ================== الصفحة ==================
+export default function VoiceOverProLanding() {
+  const reducedMotion = usePrefersReducedMotion();
+  const trainees = useCountUp(250, 4000, { disableAnimation: reducedMotion });
+  const samples = useCountUp(50, 4500, { disableAnimation: reducedMotion });
+  const proTrainees = useCountUp(30, 5000, { disableAnimation: reducedMotion });
+
+  // إذا أردتَ موعدًا نهائيًا ثابتًا، مرّر طابعًا زمنيًا بالملي ثانية إلى useCountdown
+  // مثال: 3 ساعات من الآن => Date.now() + 3*60*60*1000
+  const countdown = useCountdown();
+
+  const handlePurchase = () => {
+    try {
+      const opened = window.open(PURCHASE_URL, "_blank", "noopener,noreferrer");
+      if (!opened) window.location.href = PURCHASE_URL;
+    } catch {
+      window.location.href = PURCHASE_URL;
+    }
+  };
+
+  // مُهيّئ أرقام عربي قصير
+  const nf = useMemo(() => new Intl.NumberFormat("ar-SA"), []);
+  const year = useMemo(() => new Date().getFullYear(), []);
+
+  return (
+    <div dir="rtl" lang="ar" style={{ background: palette.bg, color: palette.text }} className="antialiased">
+      {/* ====== شريط علوي ====== */}
+      <header className="sticky top-0 z-40 backdrop-blur bg-black/30 border-b border-white/10">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-3">
+            <a href="#" className="flex items-center gap-2" aria-label="العودة للبداية">
+              <span className="inline-grid place-items-center h-8 w-8 rounded-xl bg-white/10 border border-white/15">🎙️</span>
+              <span className="font-bold text-xl" style={{ color: "#1E3A5F" }}>
+                Qader
+              </span>
+            </a>
+            <nav className="hidden md:flex items-center gap-6 text-white/70" aria-label="روابط رئيسية">
+              <a href="#why" className="hover:text-white transition-colors">
+                لماذا يجب أن تكون معلق صوتي
+              </a>
+              <a href="#stats" className="hover:text-white transition-colors">
+                أرقام
+              </a>
+              <a href="#benefits" className="hover:text-white transition-colors">
+                ليش تختار دورتنا
+              </a>
+              <a href="#coach" className="hover:text-white transition-colors">
+                عن المدرب
+              </a>
+            </nav>
+            <button
+              onClick={handlePurchase}
+              className="rounded-xl px-4 py-2 font-semibold text-black transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-yellow-400/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+              style={{ background: palette.accent }}
+              aria-label="اشترك الآن"
+            >
+              اشترك الآن
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ====== الهيرو ====== */}
+      <section className="relative overflow-hidden">
+        <div
+          className="absolute -top-24 -left-24 w-[420px] h-[420px] rounded-full blur-3xl opacity-20"
+          style={{ background: `radial-gradient(closest-side, ${palette.accent}, transparent)` }}
+          aria-hidden
+        />
+        <div
+          className="absolute -bottom-32 -right-32 w-[520px] h-[520px] rounded-full blur-3xl opacity-20"
+          style={{ background: `radial-gradient(closest-side, ${palette.accentAlt}, transparent)` }}
+          aria-hidden
+        />
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-10 items-center py-14 md:py-20">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80">
+                دورة احتراف التعليق الصوتي
+              </div>
+              <h1 className="mt-4 text-4xl sm:text-5xl md:text-6xl font-extrabold leading-[1.1]">
+                تعرف على أسرار صوتك الحقيقي وتحدث بطريقة أفضل
+              </h1>
+              <p className="mt-4 text-white/75 text-base sm:text-lg leading-relaxed">
+                اكتسب مهارة جديدة تمكّنك من تسجيل مختلف النصوص والإعلانات.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  onClick={handlePurchase}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 font-semibold text-black transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-yellow-400/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  style={{ background: palette.accent }}
+                >
+                  اشترك الآن
+                </button>
+                <a
+                  href="#why"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 font-semibold border border-white/15 bg-white/5 hover:bg-white/10 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/30"
+                >
+                  لماذا يجب أن تكون معلق صوتي؟
+                </a>
+              </div>
+            </div>
+            <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-1 shadow-2xl transform transition-all duration-500 hover:scale-105">
+              <div className="rounded-3xl" style={{ background: palette.surface }}>
+                <div className="p-6 md:p-8">
+                  <div className="text-white/80 text-sm mb-3">الفيديو التعريفي للدورة</div>
+                  <div className="aspect-video rounded-2xl bg-black/50 border border-white/10 overflow-hidden">
+                    <video
+                      className="w-full h-full object-cover rounded-2xl"
+                      controls
+                      preload="metadata"
+                      poster="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgZmlsbD0iIzAwMDAwMCIgZmlsbC1vcGFjaXR5PSIwLjUiLz4KICA8dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPtmB2YrYr9mK2Ygg2KrYudix2YrZgdmKINmE2YTYr9mI2LHYqTwvdGV4dD4KPC9zdmc+"
+                    >
+                      <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4" />
+                      <source src="https://www.w3schools.com/html/mov_bbb.ogg" type="video/ogg" />
+                      متصفحك لا يدعم عرض الفيديو.
+                    </video>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ====== الأرقام (عدادات) ====== */}
+      <section id="stats" className="py-12 md:py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5" role="list" aria-label="إحصاءات">
+            <div className="rounded-2xl p-6 border border-white/10 bg-white/5 text-center transform transition-all duration-300 hover:scale-110 hover:bg-white/15 hover:shadow-xl hover:shadow-blue-500/20 hover:border-blue-400/30">
+              <div className="text-4xl mb-2" aria-hidden>
+                👥
+              </div>
+              <div className="text-4xl font-extrabold" style={{ color: palette.accent }}>{nf.format(trainees)}+</div>
+              <div className="mt-1 text-white/70 text-sm">متدرب سابق</div>
+            </div>
+            <div className="rounded-2xl p-6 border border-white/10 bg-white/5 text-center transform transition-all duration-300 hover:scale-110 hover:bg-white/15 hover:shadow-xl hover:shadow-green-500/20 hover:border-green-400/30">
+              <div className="text-4xl mb-2" aria-hidden>
+                🎵
+              </div>
+              <div className="text-4xl font-extrabold" style={{ color: palette.accent }}>{nf.format(samples)}+</div>
+              <div className="mt-1 text-white/70 text-sm">عينات صوتية للمتدربين</div>
+            </div>
+            <div className="rounded-2xl p-6 border border-white/10 bg-white/5 text-center transform transition-all duration-300 hover:scale-110 hover:bg-white/15 hover:shadow-xl hover:shadow-purple-500/20 hover:border-purple-400/30">
+              <div className="text-4xl mb-2" aria-hidden>
+                💼
+              </div>
+              <div className="text-4xl font-extrabold" style={{ color: palette.accent }}>{nf.format(proTrainees)}+</div>
+              <div className="mt-1 text-white/70 text-sm">متدرب أصبح التعليق الصوتي مصدر دخل له</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ====== عداد الوقت لانتهاء الخصم ====== */}
+      <section className="py-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="rounded-3xl border border-red-500/30 bg-gradient-to-r from-red-900/20 to-orange-900/20 p-6 text-center">
+            <div className="text-red-400 font-bold text-sm mb-2">⚡ عرض محدود</div>
+            <div className="text-white font-bold text-lg mb-4">ينتهي الخصم خلال</div>
+            <div className="flex justify-center items-center gap-4 mb-4" aria-live="polite" aria-atomic>
+              <div className="bg-white/10 border border-white/20 rounded-xl px-4 py-3 min-w-[70px]">
+                <div className="text-2xl font-bold text-white">{String(countdown.hours).padStart(2, "0")}</div>
+                <div className="text-xs text-white/70">ساعة</div>
+              </div>
+              <div className="text-white text-xl" aria-hidden>
+                :
+              </div>
+              <div className="bg-white/10 border border-white/20 rounded-xl px-4 py-3 min-w-[70px]">
+                <div className="text-2xl font-bold text-white">{String(countdown.minutes).padStart(2, "0")}</div>
+                <div className="text-xs text-white/70">دقيقة</div>
+              </div>
+              <div className="text-white text-xl" aria-hidden>
+                :
+              </div>
+              <div className="bg-white/10 border border-white/20 rounded-xl px-4 py-3 min-w-[70px]">
+                <div className="text-2xl font-bold text-white">{String(countdown.seconds).padStart(2, "0")}</div>
+                <div className="text-xs text-white/70">ثانية</div>
+              </div>
+            </div>
+            <button
+              onClick={handlePurchase}
+              disabled={countdown.totalSeconds === 0}
+              className="rounded-2xl px-8 py-3 font-bold text-black transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-yellow-400/20 active:scale-95 bg-gradient-to-r from-yellow-400 to-orange-400 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {countdown.totalSeconds === 0
+                ? "انتهى العرض — اشترك الآن بالسعر الحالي"
+                : "اشترك الآن واحصل على خصم 80% بمناسبة إطلاق الدورة"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ====== محاور الدورة ====== */}
+      <section id="curriculum" className="py-14 md:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <h2 className="text-3xl sm:text-4xl font-extrabold">محاور الدورة</h2>
+            <p className="mt-4 text-white/70">تعلم كل ما تحتاجه لتصبح معلق صوتي محترف</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Feature icon={<span>🎯</span>} title="كيف تستخدم صوتك الحقيقي" desc="اكتشف القوة الحقيقية لصوتك وطرق تطويره" />
+            <Feature icon={<span>🎭</span>} title="أدوات التعليق الصوتي الناجح" desc="الأداء الصوتي، الإحساس، ترتيب وتقطيع النص، التلوين الصوتي" />
+            <Feature icon={<span>🫁</span>} title="تمارين التنفس والإحماء" desc="تقنيات التنفس الصحيح وتهيئة الصوت" />
+            <Feature icon={<span>🏠</span>} title="البيئة المناسبة للتسجيل الصوتي" desc="إعداد استوديو منزلي بميزانية محدودة" />
+            <Feature icon={<span>🎵</span>} title="كيف تنشئ عينة صوتية جذابة" desc="أسرار إنتاج ديمو قوي يجذب العملاء" />
+            <Feature icon={<span>💰</span>} title="التسويق للمعلق الصوتي والتسعير" desc="استراتيجيات التسويق وتحديد الأسعار المناسبة" />
+          </div>
+        </div>
+      </section>
+
+      {/* ====== لماذا تكون معلقًا صوتيًا ====== */}
+      <section id="why" className="py-14 md:py-20" style={{ background: palette.surface }}>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold">لماذا يجب أن تكون معلقًا صوتيًا؟</h2>
+            <p className="mt-4 text-white/75 text-base sm:text-lg leading-relaxed">اكتشف الفرص اللامحدودة في عالم التعليق الصوتي</p>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-6 mb-10">
+            {/* الفرصة الأولى */}
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 transform transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4 text-center" aria-hidden>
+                💼
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3 text-center">مصدر دخل مرن</h3>
+              <div className="text-white/80 text-sm leading-relaxed space-y-2">
+                <p>• العمل عن بُعد من أي مكان في العالم</p>
+                <p>• مصدر دخل أساسي أو ثانوي حسب وقتك</p>
+                <p>• ابدأ من منزلك وطور عملك تدريجياً</p>
+                <p>• لا توجد قيود على عدد العملاء أو المشاريع</p>
+              </div>
+            </div>
+
+            {/* الفرصة الثانية */}
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 transform transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4 text-center" aria-hidden>
+                🌍
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3 text-center">حرية كاملة</h3>
+              <div className="text-white/80 text-sm leading-relaxed space-y-2">
+                <p>• اختر الوقت الذي يناسبك للعمل</p>
+                <p>• تنوع في المشاريع (إعلانات، أفلام، كتب صوتية)</p>
+                <p>• بناء شبكة علاقات واسعة في مجالات مختلفة</p>
+                <p>• فرص للتعامل مع عملاء دوليين</p>
+              </div>
+            </div>
+
+            {/* الفرصة الثالثة */}
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 transform transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4 text-center" aria-hidden>
+                🎙️
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3 text-center">تطوير شخصي</h3>
+              <div className="text-white/80 text-sm leading-relaxed space-y-2">
+                <p>• تحسين مهارات التواصل والثقة بالنفس</p>
+                <p>• ضبط مخارج الحروف وتنويع النبرة</p>
+                <p>• تأثير إيجابي على حياتك الشخصية والمهنية</p>
+                <p>• مهارة قيمة تبقى معك مدى الحياة</p>
+              </div>
+            </div>
+          </div>
+
+          {/* معلومة إضافية */}
+          <div className="rounded-2xl border border-yellow-500/30 bg-gradient-to-r from-yellow-900/10 to-orange-900/10 p-6">
+            <div className="flex items-start gap-4">
+              <div className="text-2xl" aria-hidden>
+                💡
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-yellow-400 mb-2">هل تعلم؟</h4>
+                <p className="text-white/80 text-sm leading-relaxed">
+                  التعليق الصوتي مجال نامي بسرعة، وكثير من المعلقين يحققون دخلاً شهرياً يتراوح بين 2000-15000 ريال.
+                  المطلوب فقط هو البداية الصحيحة مع التدريب المناسب، وهذا ما توفره لك هذه الدورة.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ====== كيف سيؤثر عليك البرنامج التدريبي ====== */}
+      <section id="benefits" className="py-14 md:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <h2 className="text-3xl sm:text-4xl font-extrabold">كيف سيؤثر عليك البرنامج التدريبي؟</h2>
+            <p className="mt-3 text-white/70">شاهد التحول الذي ستمر به خلال رحلة التدريب</p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* قبل الاشتراك */}
+            <div className="rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-900/20 to-orange-900/20 p-6">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center gap-2 rounded-full bg-red-500/20 border border-red-500/30 px-4 py-2 text-red-400 font-semibold">
+                  😔 قبل الاشتراك
+                </div>
+              </div>
+              <div className="space-y-4">
+                {[
+                  "تتردد في التحدث أمام الآخرين وتفتقد الثقة بصوتك",
+                  "لا تعرف كيف تستفيد من صوتك أو تطوره",
+                  "تحلم بمصدر دخل إضافي لكن لا تعرف من أين تبدأ",
+                  "تفتقد مهارات التنفس الصحيح والإلقاء المؤثر",
+                  "لا تملك أي خبرة في التسجيل أو إنتاج المحتوى الصوتي",
+                ].map((t, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                    <div className="text-red-400 mt-1" aria-hidden>
+                      ❌
+                    </div>
+                    <div className="text-white/80 text-sm">{t}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* بعد الاشتراك */}
+            <div className="rounded-3xl border border-green-500/30 bg-gradient-to-br from-green-900/20 to-emerald-900/20 p-6">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center gap-2 rounded-full bg-green-500/20 border border-green-500/30 px-4 py-2 text-green-400 font-semibold">
+                  🌟 بعد الاشتراك
+                </div>
+              </div>
+              <div className="space-y-4">
+                {[
+                  "تتحدث بثقة عالية وتعرف قوة صوتك الحقيقية",
+                  "تتقن تقنيات التنفس والإحماء والتلوين الصوتي",
+                  "تحقق دخلاً شهرياً من 2000-15000 ريال من التعليق الصوتي",
+                  "تملك استوديو منزلي واستراتيجية تسويق واضحة",
+                  "تنتج عينات صوتية احترافية تجذب العملاء",
+                ].map((t, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                    <div className="text-green-400 mt-1" aria-hidden>
+                      ✅
+                    </div>
+                    <div className="text-white/80 text-sm">{t}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* السهم والنتيجة */}
+          <div className="text-center mt-12">
+            <div className="inline-flex items-center gap-4 mb-8">
+              <div className="text-6xl animate-bounce" aria-hidden>
+                ⬇️
+              </div>
+            </div>
+            <div className="rounded-2xl border border-yellow-500/30 bg-gradient-to-r from-yellow-900/10 to-orange-900/10 p-6 max-w-2xl mx-auto">
+              <div className="flex items-center gap-3 justify-center mb-4">
+                <div className="text-3xl" aria-hidden>
+                  🎯
+                </div>
+                <h3 className="text-xl font-bold text-yellow-400">النتيجة النهائية</h3>
+              </div>
+              <p className="text-white/80 text-center leading-relaxed">
+                في غضون أسابيع قليلة، ستتحول من شخص يتردد في استخدام صوته إلى معلق صوتي محترف
+                قادر على جذب العملاء وتحقيق دخل مستقر من مهارة جديدة تماماً.
+              </p>
+            </div>
+
+            <div className="mt-8">
+              <button
+                onClick={handlePurchase}
+                className="rounded-2xl px-8 py-4 font-bold text-black transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-yellow-400/20 active:scale-95 text-lg focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                style={{ background: palette.accent }}
+              >
+                ابدأ تحولك الآن 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ====== خصم خاص للطلاب ====== */}
+      <section id="student-discount" className="py-14 md:py-20" style={{ background: palette.surface }}>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="grid md:grid-cols-[1fr,1.4fr] gap-8 items-center">
+            <div className="rounded-2xl bg-gradient-to-br from-green-900/20 to-emerald-900/20 border border-green-400/30 p-8 text-center transform transition-all duration-300 hover:scale-105">
+              <div className="text-6xl mb-4" aria-hidden>
+                🎓
+              </div>
+              <div className="text-green-400 font-bold text-2xl mb-2">خصم خاص للطلاب</div>
+              <div className="text-white text-4xl font-extrabold mb-2">20%</div>
+              <div className="text-white/80 text-sm">خصم إضافي على السعر الأساسي</div>
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold">خصم إضافي مخصص للطلاب</h3>
+              <p className="mt-3 text-white/75 leading-relaxed text-sm md:text-base">
+                نؤمن بأهمية استثمار الطلاب في تطوير مهاراتهم، لذلك نقدم خصماً إضافياً بنسبة 20%
+                للطلاب الجامعيين والمدارس فوق الخصم الأساسي للدورة.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3 text-xs">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-white/80">🎯 مخصص للطلاب</span>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-white/80">💸 وفر أكثر</span>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-white/80">📚 استثمر في مستقبلك</span>
+              </div>
+              <div className="mt-6">
+                <button
+                  onClick={handlePurchase}
+                  className="rounded-2xl px-6 py-3 font-semibold text-black transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-yellow-400/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  style={{ background: palette.accent }}
+                >
+                  احصل على الخصم الآن
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ====== الأسئلة الشائعة ====== */}
+      <section className="py-14 md:py-20">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-extrabold">الأسئلة الشائعة</h2>
+            <p className="mt-3 text-white/70">إجابات على أكثر الأسئلة شيوعاً حول الدورة</p>
+          </div>
+
+          <div className="space-y-4">
+            {[
+              {
+                q: "هل أحتاج إلى معدات باهظة للبدء في التعليق الصوتي؟",
+                a: "لا، يمكنك البدء بمعدات بسيطة. سنوضح لك في الدورة كيفية إعداد استوديو منزلي بميزانية محدودة وسنرشح لك أفضل المعدات لكل ميزانية.",
+              },
+              {
+                q: "كم من الوقت أحتاج لإتقان التعليق الصوتي؟",
+                a: "مع التدريب المنتظم، يمكنك البدء في قبول المشاريع البسيطة خلال 4-6 أسابيع. الاحتراف الكامل يحتاج 3-6 أشهر من الممارسة المستمرة.",
+              },
+              { q: "هل الدورة مناسبة للمبتدئين تماماً؟", a: "نعم، الدورة مصممة خصيصاً للمبتدئين. نبدأ من الأساسيات وننتهي بمستوى احترافي يمكنك من العمل والربح." },
+              {
+                q: "كم يمكنني أن أربح من التعليق الصوتي؟",
+                a: "المعلقين الجدد يمكنهم كسب 500-2000 ريال شهرياً، أما المحترفين فيحققون 5000-15000 ريال أو أكثر. الأمر يعتمد على جودة العمل وكمية المشاريع.",
+              },
+              { q: "هل يمكنني العمل في التعليق الصوتي بدوام جزئي؟", a: "بالطبع! التعليق الصوتي من أفضل المهن للعمل الحر. يمكنك العمل في الأوقات التي تناسبك وتحديد عدد المشاريع التي تريد قبولها." },
+              { q: "ماذا لو لم أكن راضياً عن صوتي؟", a: "معظم الناس لا يعرفون القوة الحقيقية لصوتهم! سنعلمك كيفية اكتشاف وتطوير قدراتك الصوتية الخفية وستتفاجأ من النتائج." },
+            ].map(({ q, a }, i) => (
+              <details key={i} className="rounded-2xl border border-white/10 bg-white/5 p-6 group">
+                <summary className="cursor-pointer font-semibold text-white hover:text-yellow-400 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30">
+                  {q}
+                </summary>
+                <div className="mt-4 text-white/80 text-sm leading-relaxed">{a}</div>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ====== تذييل ====== */}
+      <footer className="border-t border-white/10 py-10">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center space-y-6">
+            {/* معلومات التواصل */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+              <a href="tel:+966502908001" className="flex items-center gap-2 text-white/80 hover:text-white transition-colors" aria-label="اتصال: 0502908001">
+                <Phone size={16} />
+                +966502908001
+              </a>
+              <div className="flex items-center gap-4">
+                <a
+                  href="https://wa.me/966502908001"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-white/80 hover:text-green-400 transition-colors"
+                  aria-label="تواصل واتساب"
+                >
+                  <MessageCircle size={16} />
+                  واتساب
+                </a>
+                <a
+                  href="https://instagram.com/s8llk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-white/80 hover:text-pink-400 transition-colors"
+                  aria-label="صفحة إنستاجرام"
+                >
+                  <Instagram size={16} />
+                  إنستاجرام
+                </a>
+                <a
+                  href="https://x.com/s8llk"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-white/80 hover:text-blue-400 transition-colors"
+                  aria-label="حساب إكس"
+                >
+                  <X size={16} />
+                  اكس
+                </a>
+              </div>
+            </div>
+
+            <div className="text-white/60 text-sm">جميع الحقوق محفوظة © {nf.format(year)}</div>
+          </div>
+        </div>
+      </footer>
+
+      {/* ملاحظة: إذا كنت على Next.js يمكنك نقل هذا إلى globals.css */}
+      <style>{`
+        html, body, #root, #__next { background: ${palette.bg}; }
+        body { color: ${palette.text}; }
+      `}</style>
+    </div>
+  );
+}
